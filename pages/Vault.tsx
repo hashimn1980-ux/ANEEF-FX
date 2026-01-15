@@ -192,168 +192,133 @@ const SingularityArtifact = ({ item, index, parallax }: { item: any, index: numb
   );
 };
 
+/* --- GLOBAL LIGHTBOX GALLERY --- */
+const Lightbox = ({ 
+  images, 
+  startIndex, 
+  onClose 
+}: { 
+  images: any[]; 
+  startIndex: number; 
+  onClose: () => void 
+}) => {
+  const [index, setIndex] = useState(startIndex);
+  const [isAnimating, setIsAnimating] = useState(false);
 
-/* --- HIGH PERFORMANCE ZOOM VIEWER --- */
-const ZoomModal = ({ src, onClose, isSingularity = false }: { src: string, onClose: () => void, isSingularity?: boolean }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const [scaleDisplay, setScaleDisplay] = useState(100); 
-  
-  const state = useRef({
-    scale: 1, // Start scale
-    panning: false,
-    pointX: 0,
-    pointY: 0,
-    startX: 0,
-    startY: 0
-  });
-
-  const updateTransform = () => {
-    if (imgRef.current) {
-      const { pointX, pointY, scale } = state.current;
-      imgRef.current.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
-    }
-  };
-
-  // Macro-Drill Entrance Effect
+  // Lock Body Scroll
   useEffect(() => {
-    if (isSingularity && imgRef.current) {
-        // Start zoomed in significantly
-        imgRef.current.style.transition = 'none';
-        state.current.scale = 2.5; 
-        updateTransform();
-
-        // Force reflow
-        void imgRef.current.offsetWidth;
-
-        // Animate out to 1.5 (still zoomed but viewable)
-        imgRef.current.style.transition = 'transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        state.current.scale = 1.2;
-        updateTransform();
-    }
-  }, [isSingularity]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const s = state.current;
-      const delta = -Math.sign(e.deltaY) * 0.2;
-      const newScale = Math.min(Math.max(1, s.scale + delta), 5);
-      s.scale = newScale;
-      setScaleDisplay(Math.round(newScale * 100));
-      updateTransform();
+    document.body.style.overflow = 'hidden';
+    return () => {
+        document.body.style.overflow = '';
     };
-
-    container.addEventListener('wheel', onWheel, { passive: false });
-    return () => container.removeEventListener('wheel', onWheel);
   }, []);
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    state.current.panning = true;
-    state.current.startX = e.clientX - state.current.pointX;
-    state.current.startY = e.clientY - state.current.pointY;
-    if (imgRef.current) {
-        imgRef.current.style.transition = 'none'; // Disable transition for drag
-        imgRef.current.style.cursor = 'grabbing';
-    }
+  // Prefetch adjacent images
+  useEffect(() => {
+     if (!images.length) return;
+     const nextIdx = (index + 1) % images.length;
+     const prevIdx = (index - 1 + images.length) % images.length;
+     const imgNext = new Image(); imgNext.src = images[nextIdx].src;
+     const imgPrev = new Image(); imgPrev.src = images[prevIdx].src;
+  }, [index, images]);
+
+  const handleNav = (dir: 'next' | 'prev') => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setTimeout(() => {
+        if (dir === 'next') setIndex((prev) => (prev + 1) % images.length);
+        else setIndex((prev) => (prev - 1 + images.length) % images.length);
+        setIsAnimating(false);
+    }, 400); // Cinematic transition duration
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!state.current.panning) return;
-    e.preventDefault();
-    state.current.pointX = e.clientX - state.current.startX;
-    state.current.pointY = e.clientY - state.current.startY;
-    updateTransform();
-  };
+  // Keyboard Support
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); handleNav('next'); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); handleNav('prev'); }
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isAnimating]);
 
-  const handlePointerUp = () => {
-    state.current.panning = false;
-    if (imgRef.current) {
-        imgRef.current.style.cursor = 'grab';
-        imgRef.current.style.transition = 'transform 0.1s ease-out'; // Re-enable slight smoothing
-    }
-  };
+  // Gesture Support (Swipe)
+  const bind = useDrag(({ swipe: [swipeX], tap }) => {
+    if (tap) onClose();
+    else if (swipeX === -1) handleNav('next');
+    else if (swipeX === 1) handleNav('prev');
+  }, { filterTaps: true });
 
-  const handleZoomBtn = (delta: number) => {
-    const s = state.current;
-    const newScale = Math.min(Math.max(1, s.scale + delta), 5);
-    s.scale = newScale;
-    if (newScale === 1) { s.pointX = 0; s.pointY = 0; }
-    setScaleDisplay(Math.round(newScale * 100));
-    if (imgRef.current) imgRef.current.style.transition = 'transform 0.3s ease-out';
-    updateTransform();
-  };
-
-  const handleReset = () => {
-     state.current = { ...state.current, scale: 1, pointX: 0, pointY: 0 };
-     setScaleDisplay(100);
-     if (imgRef.current) imgRef.current.style.transition = 'transform 0.5s ease-out';
-     updateTransform();
-  };
+  if (!images.length) return null;
+  const current = images[index];
 
   return (
-    <div 
-      ref={containerRef}
-      className={`fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden animate-fade-in backdrop-blur-sm touch-none
-        ${isSingularity ? 'bg-[#0A0A0A]' : 'bg-black/95'}`}
-    >
-      <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-50 pointer-events-none">
-        <div className="flex items-center gap-4">
-           <div className={`w-12 h-[1px] ${isSingularity ? 'bg-[#D4AF37]/50' : 'bg-copper/50'}`}></div>
-           <span className={`${isSingularity ? 'text-[#D4AF37]' : 'text-copper/80'} text-[10px] tracking-[0.3em] uppercase font-mono`}>
-             {isSingularity ? 'Singularity // Macro Analysis' : 'Audit Mode // High Resolution'}
-           </span>
+    <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-2xl flex items-center justify-center animate-fade-in text-white touch-none transition-all duration-500">
+        
+        {/* Navigation Layer */}
+        <div className="absolute inset-0 z-50 pointer-events-none">
+            {/* Close Button */}
+            <button 
+                onClick={onClose} 
+                className="pointer-events-auto absolute top-6 right-6 md:top-10 md:right-10 w-12 h-12 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-copper text-white/70 hover:text-copper transition-all duration-300 backdrop-blur-md group"
+                title="Close Viewer"
+            >
+                <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform duration-500">close</span>
+            </button>
+            
+            {/* Previous Arrow (Desktop) */}
+            <div className="absolute top-1/2 left-8 -translate-y-1/2 pointer-events-auto hidden md:block">
+                <button 
+                    onClick={() => handleNav('prev')} 
+                    className="w-16 h-16 flex items-center justify-center rounded-full bg-black/20 hover:bg-copper/20 border border-white/5 hover:border-copper/50 text-white/50 hover:text-white transition-all duration-300 backdrop-blur-sm group"
+                    title="Previous Image"
+                >
+                    <span className="material-symbols-outlined text-3xl font-light group-hover:-translate-x-1 transition-transform">arrow_back_ios_new</span>
+                </button>
+            </div>
+            
+            {/* Next Arrow (Desktop) */}
+            <div className="absolute top-1/2 right-8 -translate-y-1/2 pointer-events-auto hidden md:block">
+                <button 
+                    onClick={() => handleNav('next')} 
+                    className="w-16 h-16 flex items-center justify-center rounded-full bg-black/20 hover:bg-copper/20 border border-white/5 hover:border-copper/50 text-white/50 hover:text-white transition-all duration-300 backdrop-blur-sm group"
+                    title="Next Image"
+                >
+                     <span className="material-symbols-outlined text-3xl font-light group-hover:translate-x-1 transition-transform">arrow_forward_ios</span>
+                </button>
+            </div>
         </div>
-        <button 
-          onClick={onClose} 
-          className="pointer-events-auto w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-white hover:bg-white/10 hover:border-copper transition-all"
-        >
-          <span className="material-symbols-outlined">close</span>
-        </button>
-      </div>
 
-      <div 
-        className="relative w-full h-full flex items-center justify-center touch-none"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        onDoubleClick={handleReset}
-      >
-        <img 
-          ref={imgRef}
-          src={src} 
-          className="max-w-none origin-center select-none cursor-grab"
-          draggable={false}
-          style={{ maxHeight: '85vh', maxWidth: '90vw', transform: 'scale(1) translate(0px, 0px)', willChange: 'transform' }}
-          alt="Zoomed Detail"
-        />
-      </div>
-
-      <div className="absolute bottom-10 flex gap-4 z-50 pointer-events-auto">
-        <button 
-          onClick={() => handleZoomBtn(-0.5)} 
-          className={`w-12 h-12 rounded-full bg-black/40 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-md ${isSingularity ? 'hover:border-[#D4AF37] hover:text-[#D4AF37]' : 'hover:border-copper hover:text-copper'}`}
-        >
-          <span className="material-symbols-outlined">remove</span>
-        </button>
-        <div 
-          onClick={handleReset}
-          className="h-12 flex items-center justify-center px-4 bg-black/40 border border-white/10 rounded-full font-mono text-xs text-white/60 backdrop-blur-md min-w-[80px] cursor-pointer hover:text-white"
-        >
-          {scaleDisplay}%
+        {/* Content Layer (Draggable for Swipe) */}
+        <div {...bind()} className="relative w-full h-full flex flex-col items-center justify-center p-6 md:p-20 cursor-grab active:cursor-grabbing">
+            <div 
+                className={`relative flex flex-col items-center max-w-7xl w-full transition-all duration-[400ms] cubic-bezier(0.2, 0, 0, 1) ${isAnimating ? 'opacity-0 scale-95 blur-sm' : 'opacity-100 scale-100 blur-0'}`}
+                onClick={(e) => e.stopPropagation()} 
+            >
+                <div className="relative shadow-2xl shadow-black/80">
+                    <img 
+                       src={current.src} 
+                       alt={current.title}
+                       className="max-h-[70vh] md:max-h-[80vh] max-w-full object-contain select-none pointer-events-none"
+                       draggable={false}
+                    />
+                </div>
+                
+                {/* Refined Metadata */}
+                <div className="mt-8 text-center animate-fade-in flex flex-col items-center gap-3">
+                    <h3 className="font-serif text-2xl md:text-3xl italic text-white/90 tracking-wide">{current.title}</h3>
+                    
+                    <div className="flex items-center gap-6 text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-copper/80 font-mono">
+                        <span>{current.collection}</span>
+                        <div className="w-1 h-1 bg-copper rounded-full"></div>
+                        <span className="text-white">NO. {index + 1} / {images.length}</span>
+                        <div className="w-1 h-1 bg-copper rounded-full"></div>
+                        <span>SECURE</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <button 
-          onClick={() => handleZoomBtn(0.5)} 
-          className={`w-12 h-12 rounded-full bg-black/40 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-md ${isSingularity ? 'hover:border-[#D4AF37] hover:text-[#D4AF37]' : 'hover:border-copper hover:text-copper'}`}
-        >
-          <span className="material-symbols-outlined">add</span>
-        </button>
-      </div>
     </div>
   );
 };
@@ -361,7 +326,10 @@ const ZoomModal = ({ src, onClose, isSingularity = false }: { src: string, onClo
 const Vault: React.FC<VaultProps> = ({ language }) => {
   const [selectedNode, setSelectedNode] = useState<Collection | null>(null);
   const [flippedId, setFlippedId] = useState<string | null>(null);
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  
+  // New State for Lightbox
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isClosingGesture, setIsClosingGesture] = useState(false);
   
@@ -369,7 +337,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
   const [isSingularityUnlocked, setIsSingularityUnlocked] = useState(false);
   const parallax = useParallax();
 
-  // Gesture Hook for Swipe to Close
+  // Gesture Hook for Swipe to Close (Node View)
   const bind = useDrag(({ swipe: [, swipeY], tap, down, movement: [, my] }) => {
     if (tap) return; 
     
@@ -483,7 +451,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
     <div className={`vault-world-system h-screen overflow-hidden relative ${selectedNode === 'SINGULARITY' ? 'bg-[#0A0A0A]' : 'bg-black'}`}>
       <style>{`
         .vault-world-system {
-          perspective: 2000px;
+          perspective: 2500px; /* Enhanced depth for grander feel */
           background: ${selectedNode === 'SINGULARITY' ? '#0A0A0A' : 'radial-gradient(circle at center, #0a1a2a 0%, #050505 100%)'};
         }
 
@@ -492,8 +460,8 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: flex-start; /* Changed from center to allow scrolling */
-          gap: 2.5rem; /* Better separation */
+          justify-content: flex-start;
+          gap: 2.5rem;
           padding: 0 1rem;
           width: 100%;
           height: 100%;
@@ -531,7 +499,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
 
         .node-portal {
           position: relative;
-          width: clamp(140px, 45vw, 200px); /* Slightly smaller max size for mobile */
+          width: clamp(140px, 45vw, 200px);
           aspect-ratio: 1/1;
           border-radius: 50%;
           transform-style: preserve-3d;
@@ -753,12 +721,16 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           width: 100%;
           height: 100%;
           text-align: center;
-          transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+          /* LUXURY EASING: Slow entry, fast mid, very slow settle. Like a heavy vault door. */
+          transition: transform 1.4s cubic-bezier(0.2, 0, 0.1, 1), box-shadow 1.4s ease;
           transform-style: preserve-3d;
+          box-shadow: 0 15px 35px rgba(0,0,0,0.5);
         }
 
         .dossier-card.flipped .card-inner {
+          /* Rotate and slightly lift closer to camera for emphasis */
           transform: rotateY(180deg);
+          box-shadow: 0 30px 60px rgba(0,0,0,0.7);
         }
 
         .card-front, .card-back {
@@ -770,7 +742,20 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           backface-visibility: hidden;
           border-radius: 2px;
           overflow: hidden;
-          box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+          /* Important for nested parallax */
+          transform-style: preserve-3d;
+        }
+
+        /* 3D Parallax: Back Content Floats */
+        .card-back-content {
+           transform: translateZ(50px); /* Lifts text off the card surface */
+           transform-style: preserve-3d;
+           backface-visibility: hidden;
+        }
+        
+        /* 3D Parallax: Front Image Depth */
+        .card-front-content {
+           transform: translateZ(20px);
         }
 
         .card-front {
@@ -962,7 +947,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
                  </div>
 
                  {archiveWorld.map((item, i) => (
-                    <div key={item.id} onClick={() => setZoomedImage(item.src)}>
+                    <div key={item.id} onClick={() => setLightboxIndex(i)}>
                        <SingularityArtifact item={item} index={i} parallax={parallax} />
                     </div>
                  ))}
@@ -998,16 +983,16 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
                   
                   {/* FRONT: IMAGE (Click to Zoom) */}
                   <div className="card-front">
-                    <div className="relative w-full h-full cursor-zoom-in group" onClick={(e) => { e.stopPropagation(); setZoomedImage(item.src); }}>
+                    <div className="relative w-full h-full cursor-zoom-in group card-front-content" onClick={(e) => { e.stopPropagation(); setLightboxIndex(idx); }}>
                        <img src={item.src} alt={item.title} className="dossier-image" loading="eager" />
                        
                        {/* Zoom Affordance */}
                        <div className="absolute top-6 right-6 w-8 h-8 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <span className="material-symbols-outlined text-sm">zoom_in</span>
+                          <span className="material-symbols-outlined text-sm">fullscreen</span>
                        </div>
                     </div>
 
-                    <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end pointer-events-none">
+                    <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end pointer-events-none card-front-content">
                        <span className="font-serif text-white/40 text-4xl">{String(idx + 1).padStart(2, '0')}</span>
                        
                        {/* Flip Trigger Button */}
@@ -1022,7 +1007,8 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
 
                   {/* BACK: DATA TERMINAL (Click to Flip Back) */}
                   <div className="card-back" onClick={() => handleCardFlip(item.id)}>
-                    <div className="p-8 w-full h-full flex flex-col justify-center relative z-10">
+                    {/* Added 'card-back-content' class for internal parallax */}
+                    <div className="p-8 w-full h-full flex flex-col justify-center relative z-10 card-back-content">
                        <div className="absolute top-4 left-4 w-4 h-4 border-t border-l border-copper opacity-50"></div>
                        <div className="absolute top-4 right-4 w-4 h-4 border-t border-r border-copper opacity-50"></div>
                        <div className="absolute bottom-4 left-4 w-4 h-4 border-b border-l border-copper opacity-50"></div>
@@ -1057,12 +1043,12 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
         </div>
       )}
 
-      {/* ZOOM MODAL OVERLAY */}
-      {zoomedImage && (
-        <ZoomModal 
-          src={zoomedImage} 
-          onClose={() => setZoomedImage(null)}
-          isSingularity={selectedNode === 'SINGULARITY'}
+      {/* NEW LIGHTBOX MODAL */}
+      {lightboxIndex !== null && (
+        <Lightbox 
+          images={archiveWorld}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
         />
       )}
 
