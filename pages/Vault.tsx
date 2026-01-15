@@ -370,7 +370,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
   const parallax = useParallax();
 
   // Gesture Hook for Swipe to Close
-  const bind = useDrag(({ swipe: [swipeX, swipeY], tap, down, movement: [mx, my] }) => {
+  const bind = useDrag(({ swipe: [, swipeY], tap, down, movement: [, my] }) => {
     if (tap) return; 
     
     // Feedback during drag
