@@ -39,6 +39,15 @@ const Institution: React.FC<InstitutionProps> = ({ language }) => {
       return;
     }
 
+    // Safety Timeout: Force load completion after 5 seconds to prevent hanging
+    const timeoutId = setTimeout(() => {
+      if (!isGlobalLoaded) {
+        console.warn('Asset loading timed out. Forcing navigation.');
+        isGlobalLoaded = true;
+        setImagesLoaded(true);
+      }
+    }, 5000);
+
     if (!isGlobalInitializationStarted) {
       isGlobalInitializationStarted = true;
       for (let i = 0; i < frameCount; i++) {
@@ -49,6 +58,12 @@ const Institution: React.FC<InstitutionProps> = ({ language }) => {
     }
 
     const checkProgress = () => {
+      if (isGlobalLoaded) {
+          setImagesLoaded(true);
+          setLoadProgress(100);
+          return;
+      }
+
       let loadedCount = 0;
       let allComplete = true;
 
@@ -72,6 +87,8 @@ const Institution: React.FC<InstitutionProps> = ({ language }) => {
     };
 
     requestAnimationFrame(checkProgress);
+
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // 3. Canvas Rendering Logic
@@ -81,6 +98,7 @@ const Institution: React.FC<InstitutionProps> = ({ language }) => {
     const ctx = canvas.getContext('2d');
     const img = imageCache[index];
 
+    // If image isn't loaded yet (e.g. timeout forced entry), skip or use first frame if avail
     if (!ctx || !img || !img.complete) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
