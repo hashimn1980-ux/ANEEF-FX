@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useDrag } from '@use-gesture/react';
 import { ASSETS } from '../constants';
 import { Language } from '../types';
@@ -8,189 +8,6 @@ interface VaultProps {
 }
 
 type Collection = 'POWER' | 'VOYAGE' | 'ESSENCE' | 'SINGULARITY';
-
-/* --- HOOKS --- */
-const useParallax = () => {
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 20; // -10 to 10 deg
-      const y = (e.clientY / window.innerHeight - 0.5) * 20;
-      setOffset({ x, y });
-    };
-
-    const handleOrientation = (e: DeviceOrientationEvent) => {
-      if (!e.gamma || !e.beta) return;
-      // Clamp values
-      const x = Math.min(Math.max(e.gamma, -20), 20);
-      const y = Math.min(Math.max(e.beta, -20), 20);
-      setOffset({ x, y });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    if (window.DeviceOrientationEvent) {
-      window.addEventListener('deviceorientation', handleOrientation);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('deviceorientation', handleOrientation);
-    };
-  }, []);
-
-  return offset;
-};
-
-/* --- SUB-COMPONENTS --- */
-
-// 1. Biometric Entry Animation - "The Sovereign Reveal"
-const BiometricGate = ({ onUnlock }: { onUnlock: () => void }) => {
-  const [scanLineTop, setScanLineTop] = useState(0);
-  const [status, setStatus] = useState('AUTHENTICATING...');
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    // Phase 1: Scan
-    const interval = setInterval(() => {
-      setScanLineTop(prev => (prev + 3) % 100);
-    }, 16);
-
-    // Phase 2: Authenticate
-    setTimeout(() => {
-      setStatus('ACCESS GRANTED');
-    }, 1500);
-
-    // Phase 3: Open (Shutter)
-    setTimeout(() => {
-      clearInterval(interval);
-      setIsOpen(true);
-      setTimeout(onUnlock, 1200); // Wait for animation
-    }, 2200);
-
-    return () => clearInterval(interval);
-  }, [onUnlock]);
-
-  return (
-    <div className={`fixed inset-0 z-[60] flex flex-col items-center justify-center font-mono text-[10px] tracking-[0.3em] text-[#F5F5F0] pointer-events-none`}>
-      
-      {/* Top Shutter */}
-      <div className={`absolute top-0 left-0 w-full bg-[#0A0A0A] z-50 transition-all duration-[1000ms] ease-[cubic-bezier(0.8,0,0.2,1)]
-        ${isOpen ? '-translate-y-full' : 'h-1/2 translate-y-0'}`}>
-         <div className="absolute bottom-0 w-full h-[1px] bg-[#D4AF37]/30"></div>
-      </div>
-
-      {/* Bottom Shutter */}
-      <div className={`absolute bottom-0 left-0 w-full bg-[#0A0A0A] z-50 transition-all duration-[1000ms] ease-[cubic-bezier(0.8,0,0.2,1)]
-        ${isOpen ? 'translate-y-full' : 'h-1/2 translate-y-0'}`}>
-         <div className="absolute top-0 w-full h-[1px] bg-[#D4AF37]/30"></div>
-      </div>
-
-      {/* Content Layer (Fades out when opening) */}
-      <div className={`relative z-[60] flex flex-col items-center transition-opacity duration-500 ${isOpen ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="relative w-64 h-64 border border-white/5 flex items-center justify-center overflow-hidden bg-black/50 backdrop-blur-sm">
-          {/* Scan Line */}
-          <div 
-            className="absolute left-0 w-full h-[1px] bg-[#D4AF37] shadow-[0_0_15px_#D4AF37] z-10"
-            style={{ top: `${scanLineTop}%` }}
-          ></div>
-          
-          <div className="relative z-20 text-center">
-            <span className="material-symbols-outlined text-4xl mb-4 text-[#D4AF37] opacity-80 animate-pulse">fingerprint</span>
-            <p className={status === 'ACCESS GRANTED' ? 'text-[#D4AF37] animate-pulse' : 'text-white/40'}>{status}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 2. Singularity Artifact Card (Touch Lume + Gyro Seal)
-const SingularityArtifact = ({ item, index, parallax }: { item: any, index: number, parallax: {x: number, y: number} }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    cardRef.current.style.setProperty('--lume-x', `${x}px`);
-    cardRef.current.style.setProperty('--lume-y', `${y}px`);
-    cardRef.current.style.setProperty('--lume-opacity', '1');
-  };
-
-  const handlePointerLeave = () => {
-    if (!cardRef.current) return;
-    cardRef.current.style.setProperty('--lume-opacity', '0');
-  };
-
-  return (
-    <div className="w-full max-w-md mx-auto mb-32 relative group perspective-1000">
-      
-      {/* 4:5 Aspect Ratio Container */}
-      <div 
-        ref={cardRef}
-        className="relative w-full aspect-[4/5] overflow-hidden bg-[#050505] cursor-none"
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-        style={{
-          boxShadow: '0 30px 60px -15px rgba(0,0,0,0.9)'
-        }}
-      >
-         {/* Ghost Gradient Border */}
-         <div className="absolute inset-0 border border-white/5 z-20 pointer-events-none"></div>
-
-         {/* Base Image */}
-         <img 
-           src={item.src} 
-           alt="Singularity Artifact" 
-           className="w-full h-full object-cover filter contrast-[1.05] brightness-[0.9] grayscale-[0.1] transition-transform duration-[1.5s] ease-out group-hover:scale-105" 
-         />
-
-         {/* Touch Lume Layer (Flashlight Effect) */}
-         <div 
-           className="absolute inset-0 pointer-events-none mix-blend-overlay transition-opacity duration-300 z-10"
-           style={{
-             opacity: 'var(--lume-opacity, 0)',
-             background: 'radial-gradient(circle 250px at var(--lume-x, 50%) var(--lume-y, 50%), rgba(255,255,255,0.15), transparent 100%)'
-           }}
-         />
-
-         {/* Inner Shadow / Vignette */}
-         <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.8)] pointer-events-none z-10"></div>
-
-         {/* 1/1 Seal - Bottom Right INSIDE the frame */}
-         <div 
-           className="absolute bottom-6 right-6 z-30 flex items-center justify-center pointer-events-none"
-           style={{
-             transform: `rotateX(${parallax.y * 0.5}deg) rotateY(${parallax.x * 0.5}deg)`,
-             transition: 'transform 0.1s ease-out',
-           }}
-         >
-            <div className="relative border border-[#D4AF37]/60 px-3 py-1 bg-black/40 backdrop-blur-md shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-               <div className="absolute inset-0 bg-gradient-to-tr from-[#D4AF37]/10 to-transparent opacity-50"></div>
-               <span className="text-[#D4AF37] text-[10px] font-serif italic tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
-                 1/1
-               </span>
-            </div>
-         </div>
-      </div>
-
-      {/* Metadata */}
-      <div className="mt-8 flex justify-between items-end px-2 opacity-60 group-hover:opacity-100 transition-opacity duration-700">
-         <div className="flex flex-col gap-2">
-            <span className="text-[#F5F5F0] font-sans text-[8px] uppercase tracking-[0.4em]">
-              Archive {String(index + 1).padStart(3, '0')}
-            </span>
-            <span className="text-[#F5F5F0] font-serif text-sm tracking-wide">
-              {item.metadata[3].val}
-            </span>
-         </div>
-         <div className="h-[1px] flex-grow mx-6 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-         <span className="text-[#F5F5F0] text-[8px] uppercase tracking-[0.3em]">Verified</span>
-      </div>
-    </div>
-  );
-};
 
 /* --- GLOBAL LIGHTBOX GALLERY --- */
 const Lightbox = ({ 
@@ -326,16 +143,10 @@ const Lightbox = ({
 const Vault: React.FC<VaultProps> = ({ language }) => {
   const [selectedNode, setSelectedNode] = useState<Collection | null>(null);
   const [flippedId, setFlippedId] = useState<string | null>(null);
-  
-  // New State for Lightbox
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isClosingGesture, setIsClosingGesture] = useState(false);
-  
-  // Singularity Specific State
-  const [isSingularityUnlocked, setIsSingularityUnlocked] = useState(false);
-  const parallax = useParallax();
 
   // Gesture Hook for Swipe to Close (Node View)
   const bind = useDrag(({ swipe: [, swipeY], tap, down, movement: [, my] }) => {
@@ -372,7 +183,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
       metadata: [
         { label: "ID", val: `ANF-${Math.random().toString(36).substr(2, 4).toUpperCase()}` },
         { label: "ZONE", val: selectedNode },
-        { label: "AUTH", val: "INSTITUTIONAL" },
+        { label: "AUTH", val: selectedNode === 'SINGULARITY' ? "RESTRICTED" : "INSTITUTIONAL" },
         { label: "IMG_HASH", val: Math.random().toString(16).substr(2, 8).toUpperCase() },
         { label: "STATUS", val: "VERIFIED" },
       ]
@@ -427,7 +238,6 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
     
     setIsTransitioning(true);
     setFlippedId(null);
-    setIsSingularityUnlocked(false); // Reset gate
     
     setTimeout(() => {
       setSelectedNode(category);
@@ -448,11 +258,11 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
   };
 
   return (
-    <div className={`vault-world-system h-screen overflow-hidden relative ${selectedNode === 'SINGULARITY' ? 'bg-[#0A0A0A]' : 'bg-black'}`}>
+    <div className="vault-world-system h-screen overflow-hidden relative bg-black">
       <style>{`
         .vault-world-system {
-          perspective: 2500px; /* Enhanced depth for grander feel */
-          background: ${selectedNode === 'SINGULARITY' ? '#0A0A0A' : 'radial-gradient(circle at center, #0a1a2a 0%, #050505 100%)'};
+          perspective: 2500px;
+          background: radial-gradient(circle at center, #0a1a2a 0%, #050505 100%);
         }
 
         /* --- STAGE 1: THE VOID (Floating Nodes) --- */
@@ -505,8 +315,8 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           transform-style: preserve-3d;
           transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
           overflow: hidden;
-          border: 1px solid rgba(183, 121, 92, 0.4);
-          box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(183, 121, 92, 0.1);
+          border: 1px solid rgba(183, 121, 92, 0.3);
+          box-shadow: 0 0 30px rgba(0,0,0,0.9), inset 0 0 20px rgba(183, 121, 92, 0.05);
           background: #000;
         }
 
@@ -517,9 +327,12 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
         }
 
         .portal-wrapper:hover .node-portal {
-          transform: scale(1.08) translateZ(30px);
-          border-color: #B7795C;
-          box-shadow: 0 0 80px rgba(183, 121, 92, 0.4), inset 0 0 50px rgba(183, 121, 92, 0.2);
+          transform: scale(1.05) translateZ(30px);
+          border-color: rgba(212, 154, 125, 0.8);
+          box-shadow: 
+            0 0 25px rgba(183, 121, 92, 0.5), 
+            0 0 70px rgba(183, 121, 92, 0.2), 
+            inset 0 0 40px rgba(183, 121, 92, 0.2);
         }
 
         .node-portal img {
@@ -531,8 +344,8 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
         }
 
         .portal-wrapper:hover img {
-          filter: grayscale(0) contrast(1);
-          transform: scale(1.15);
+          filter: grayscale(0) contrast(1.1);
+          transform: scale(1.2);
         }
 
         .node-label {
@@ -617,16 +430,78 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           font-weight: bold;
           font-family: 'Public Sans', sans-serif;
           cursor: pointer;
-          transition: all 0.2s ease-out;
+          transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          position: relative;
         }
         .dock-item:hover {
           color: white;
-          background: rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.15);
+          transform: scale(1.25);
+          box-shadow: 0 0 20px rgba(183, 121, 92, 0.2);
+          z-index: 20;
         }
         .dock-item.active {
           color: #000;
           background: #B7795C;
           box-shadow: 0 0 15px rgba(183, 121, 92, 0.4);
+          transform: scale(1.1);
+        }
+
+        .dock-tooltip {
+           position: absolute;
+           bottom: 50px;
+           left: 50%;
+           transform: translateX(-50%) translateY(10px) scale(0.95);
+           background: rgba(5, 5, 5, 0.95);
+           border: 1px solid rgba(183, 121, 92, 0.3);
+           padding: 0.75rem 1rem;
+           border-radius: 4px;
+           opacity: 0;
+           pointer-events: none;
+           transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           text-align: center;
+           white-space: nowrap;
+           backdrop-filter: blur(12px);
+           box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+           z-index: 200;
+           min-width: 120px;
+        }
+
+        .dock-item:hover .dock-tooltip {
+           opacity: 1;
+           transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        /* Tooltip Arrow */
+        .dock-tooltip::after {
+           content: '';
+           position: absolute;
+           bottom: -5px;
+           left: 50%;
+           transform: translateX(-50%) rotate(45deg);
+           width: 8px;
+           height: 8px;
+           background: rgba(5, 5, 5, 0.95);
+           border-right: 1px solid rgba(183, 121, 92, 0.3);
+           border-bottom: 1px solid rgba(183, 121, 92, 0.3);
+        }
+
+        .tooltip-title {
+           font-size: 10px;
+           color: #B7795C;
+           text-transform: uppercase;
+           letter-spacing: 0.2em;
+           font-weight: 700;
+           margin-bottom: 2px;
+        }
+        .tooltip-desc {
+           font-size: 9px;
+           color: rgba(255, 255, 255, 0.6);
+           text-transform: none;
+           letter-spacing: 0.05em;
         }
 
         .dock-separator {
@@ -826,17 +701,6 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-15px); }
         }
-
-        /* --- SINGULARITY SCROLLBAR --- */
-        .singularity-scroll::-webkit-scrollbar {
-          width: 2px;
-        }
-        .singularity-scroll::-webkit-scrollbar-track {
-          background: #0A0A0A;
-        }
-        .singularity-scroll::-webkit-scrollbar-thumb {
-          background: #333;
-        }
       `}</style>
 
       {/* FIXED UI ELEMENTS - VOID TITLE (DESKTOP) */}
@@ -902,11 +766,16 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
                 {(['POWER', 'VOYAGE', 'ESSENCE', 'SINGULARITY'] as Collection[]).map((c) => (
                   <div 
                     key={c}
-                    className={`dock-item ${selectedNode === c ? 'active' : ''}`}
+                    className={`dock-item group ${selectedNode === c ? 'active' : ''}`}
                     onClick={() => handleSwitchCategory(c)}
-                    title={txt.categories[c]}
                   >
                     {c.charAt(0)}
+                    
+                    {/* Custom Tooltip */}
+                    <div className="dock-tooltip">
+                      <span className="tooltip-title">{txt.categories[c]}</span>
+                      <span className="tooltip-desc">{txt.descriptions[c]}</span>
+                    </div>
                   </div>
                 ))}
                 
@@ -923,49 +792,8 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
          </>
       )}
 
-      {/* --- THE SINGULARITY EXPERIENCE --- */}
-      {selectedNode === 'SINGULARITY' && (
-        <div {...bind()} className="touch-none h-full w-full">
-           {/* Biometric Gate */}
-           {!isSingularityUnlocked && (
-             <BiometricGate onUnlock={() => setIsSingularityUnlocked(true)} />
-           )}
-
-           {/* Vertical Feed (Visible after Unlock) */}
-           <div 
-             className={`fixed inset-0 z-40 bg-[#0A0A0A] overflow-y-auto singularity-scroll transition-opacity duration-1000 ${isSingularityUnlocked ? 'opacity-100' : 'opacity-0'}`}
-           >
-              {/* Singularity Header */}
-              <div className="fixed top-0 left-0 w-full p-8 flex justify-center items-center z-50 pointer-events-none">
-                 <div className="text-[#F5F5F0] text-[10px] tracking-[0.4em] uppercase font-bold mix-blend-difference opacity-50">Singularity</div>
-              </div>
-
-              <div className="max-w-xl mx-auto pt-32 pb-[calc(8rem+env(safe-area-inset-bottom))] px-6">
-                 <div className="text-center mb-24 opacity-60">
-                    <h2 className="text-[#F5F5F0] font-serif italic text-2xl mb-4">Sovereign Archives</h2>
-                    <p className="text-[#F5F5F0] text-[9px] uppercase tracking-[0.3em]">Restricted Access // 1 of 1</p>
-                 </div>
-
-                 {archiveWorld.map((item, i) => (
-                    <div key={item.id} onClick={() => setLightboxIndex(i)}>
-                       <SingularityArtifact item={item} index={i} parallax={parallax} />
-                    </div>
-                 ))}
-                 
-                 <div className="text-center mt-32 mb-12">
-                    <span className="material-symbols-outlined text-[#D4AF37] opacity-40 text-2xl animate-pulse">check_circle</span>
-                 </div>
-                 
-                 {/* Scroll Spacer for Dock */}
-                 <div className="h-24"></div>
-              </div>
-           </div>
-        </div>
-      )}
-
-
-      {/* --- STANDARD IMMERSIVE WORLD (POWER / VOYAGE / ESSENCE) --- */}
-      {selectedNode && selectedNode !== 'SINGULARITY' && (
+      {/* --- UNIFIED GALLERY VIEW (FOR ALL COLLECTIONS) --- */}
+      {selectedNode && (
         <div {...bind()} className="touch-none h-full w-full">
           <div className={`immersive-gallery no-scrollbar gallery-container ${isTransitioning ? 'fade-out' : ''}`}>
             
@@ -995,7 +823,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
                     <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end pointer-events-none card-front-content">
                        <span className="font-serif text-white/40 text-4xl">{String(idx + 1).padStart(2, '0')}</span>
                        
-                       {/* Flip Trigger Button */}
+                       {/* Flip Trigger Button (Unified across all types) */}
                        <button 
                          className="pointer-events-auto text-[9px] text-copper uppercase tracking-[0.2em] border border-copper/30 px-3 py-1 bg-black/60 backdrop-blur-sm hover:bg-copper hover:text-white transition-all flex items-center gap-1"
                          onClick={(e) => { e.stopPropagation(); handleCardFlip(item.id); }}
@@ -1027,7 +855,7 @@ const Vault: React.FC<VaultProps> = ({ language }) => {
 
                        <div className="mt-12 text-center">
                          <div className="inline-block border border-copper px-4 py-2 text-copper text-[10px] uppercase tracking-[0.3em]">
-                           Classified
+                           {item.collection === 'SINGULARITY' ? 'RESTRICTED' : 'CLASSIFIED'}
                          </div>
                        </div>
                     </div>
